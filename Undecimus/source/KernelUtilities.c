@@ -397,3 +397,133 @@ void mount_lock(uint64_t mp) {
 void mount_unlock(uint64_t mp) {
     kexecute(GETOFFSET(lck_mtx_unlock), ReadKernel64(mp + koffset(KSTRUCT_OFFSET_MOUNT_MNT_MLOCK)), 0, 0, 0, 0, 0, 0);
 }
+
+size_t kstrlen(uint64_t ptr) {
+    size_t kstrlen = (size_t)kexecute(GETOFFSET(strlen), ptr, 0, 0, 0, 0, 0, 0);
+    return kstrlen;
+}
+
+uint64_t kstralloc(const char *str) {
+    size_t str_kptr_size = strlen(str) + 1;
+    uint64_t str_kptr = kmem_alloc(str_kptr_size);
+    if (str_kptr != 0) {
+        kwrite(str_kptr, str, str_kptr_size);
+    }
+    return str_kptr;
+}
+
+void kstrfree(uint64_t ptr) {
+    if (ptr != 0) {
+        size_t size = kstrlen(ptr);
+        kmem_free(ptr, size);
+    }
+}
+
+uint64_t sstrdup(const char *str) {
+    uint64_t sstrdup = 0;
+    uint64_t kstr = kstralloc(str);
+    if (kstr != 0) {
+        sstrdup = kexecute(GETOFFSET(sstrdup), kstr, 0, 0, 0, 0, 0, 0);
+        sstrdup = zm_fix_addr(sstrdup);
+        kstrfree(kstr);
+    }
+    return sstrdup;
+}
+
+uint64_t smalloc(size_t size) {
+    uint64_t smalloc = kexecute(GETOFFSET(smalloc), (uint64_t)size, 0, 0, 0, 0, 0, 0);
+    smalloc = zm_fix_addr(smalloc);
+    return smalloc;
+}
+
+void sfree(uint64_t ptr) {
+    kexecute(GETOFFSET(sfree), ptr, 0, 0, 0, 0, 0, 0);
+}
+
+int extension_create_file(uint64_t saveto, uint64_t sb, const char *path, size_t path_len, uint32_t subtype) {
+    int extension_create_file = 0;
+    uint64_t kstr = kstralloc(path);
+    if (kstr != 0) {
+        extension_create_file = (int)kexecute(GETOFFSET(extension_create_file), saveto, sb, kstr, (uint64_t)path_len, (uint64_t)subtype, 0, 0);
+        kstrfree(kstr);
+    }
+    return extension_create_file;
+}
+
+int extension_add(uint64_t ext, uint64_t sb, const char *desc) {
+    int extension_add = 0;
+    uint64_t kstr = kstralloc(desc);
+    if (kstr != 0) {
+        extension_add = (int)kexecute(GETOFFSET(extension_add), ext, sb, kstr, 0, 0, 0, 0);
+        kstrfree(kstr);
+    }
+    return extension_add;
+}
+
+void extension_release(uint64_t ext) {
+    kexecute(GETOFFSET(extension_release), ext, 0, 0, 0, 0, 0, 0);
+}
+
+bool set_sandbox_extension(uint64_t proc, const char *exc_key, const char *path) {
+    bool set_sandbox_extension = true;
+    LOG("Setting sandbox extension (proc: 0x%llx, exc_key: %s, path: %s)", proc, exc_key, path);
+    LOG("Allocating sandbox memory");
+    uint64_t ext = smalloc(SIZEOF_STRUCT_EXTENSION);
+    LOG("ext: 0x%llx", ext);
+    if (ext != 0) {
+        LOG("Allocated sandbox memory");
+        LOG("Finding proc_ucred");
+        uint64_t proc_ucred = ReadKernel64(proc + koffset(KSTRUCT_OFFSET_PROC_UCRED));
+        LOG("proc_ucred: 0x%llx", proc_ucred);
+        if (proc_ucred != 0) {
+            LOG("Found proc_ucred");
+            uint64_t cr_label = ReadKernel64(proc_ucred + koffset(KSTRUCT_OFFSET_UCRED_CR_LABEL));
+            LOG("cr_label: 0x%llx", cr_label);
+            if (cr_label != 0) {
+                LOG("Found cr_label");
+                LOG("Finding sandbox");
+                uint64_t sandbox = ReadKernel64(cr_label + 0x8 + 0x8);
+                LOG("sandbox: 0x%llx", sandbox);
+                if (sandbox != 0) {
+                    LOG("Found sandbox");
+                    LOG("Creating file extension");
+                    int ret_extension_create_file = extension_create_file(ext, sandbox, path, strlen(path) + 1, ET_FILE);
+                    LOG("extension_create_file: 0x%x", ret_extension_create_file);
+                    if (ret_extension_create_file == 0) {
+                        int ret_extension_add = extension_add(ext, sandbox, exc_key);
+                        LOG("extension_add: 0x%x", ret_extension_add);
+                        if (ret_extension_add == 0) {
+                            LOG("Added file extension");
+                            set_sandbox_extension = true;
+                        } else {
+                            LOG("Unable to add file extension");
+                        }
+                    } else {
+                        LOG("Unable to create file extension");
+                    }
+                    LOG("Releasing file extension");
+                    extension_release(ext);
+                    LOG("Released file extension");
+                } else {
+                    LOG("Process is not sandboxed");
+                    set_sandbox_extension = true;
+                }
+            } else {
+                LOG("Unable to find cr_label");
+            }
+        } else {
+            LOG("Unable to find proc_ucred");
+        }
+        LOG("Freeing sandbox memory");
+        sfree(ext);
+        LOG("Freed sandbox memory");
+    } else {
+        LOG("Unable to allocate sandbox memory");
+    }
+    if (set_sandbox_extension) {
+        LOG("Set sandbox extension (proc: 0x%llx, exc_key: %s, path: %s)", proc, exc_key, path);
+    } else {
+        LOG("Unable to set sandbox extension (proc: 0x%llx, exc_key: %s, path: %s)", path, exc_key, path);
+    }
+    return set_sandbox_extension;
+}

@@ -9,6 +9,16 @@
 #define GETOFFSET(offset) get_offset(#offset)
 
 #define KERN_POINTER_VALID(val) ((val) >= 0xffff000000000000 && (val) != 0xffffffffffffffff)
+#define SIZEOF_STRUCT_EXTENSION 0x60
+
+enum ext_type {
+    ET_FILE = 0,
+    ET_MACH = 1,
+    ET_IOKIT_REG_ENT = 2,
+    ET_POSIX_IPC = 4,
+    ET_PREF_DOMAIN = 5, // inlined in issue_extension_for_preference_domain
+    ET_SYSCTL = 6, // inlined in issue_extension_for_sysctl
+};
 
 extern uint64_t kernel_base;
 extern uint64_t kernel_slide;
@@ -58,5 +68,14 @@ void vnode_lock(uint64_t vp);
 void vnode_unlock(uint64_t vp);
 void mount_lock(uint64_t mp);
 void mount_unlock(uint64_t mp);
+size_t kstrlen(uint64_t ptr);
+uint64_t kstralloc(const char *str);
+void kstrfree(uint64_t ptr);
+uint64_t sstrdup(const char *str);
+void sfree(uint64_t ptr);
+int extension_create_file(uint64_t saveto, uint64_t sb, const char *path, size_t path_len, uint32_t subtype);
+int extension_add(uint64_t ext, uint64_t sb, const char *desc);
+void extension_release(uint64_t ext);
+bool set_sandbox_extension(uint64_t proc, const char *exc_key, const char *path);
 
 #endif /* kutils_h */

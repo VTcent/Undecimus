@@ -415,16 +415,14 @@ uint64_t _vfs_context() {
 }
 
 int _vnode_lookup(const char *path, int flags, uint64_t *vpp, uint64_t vfs_context){
-    size_t len = strlen(path) + 1;
     uint64_t vnode = kmem_alloc(sizeof(uint64_t));
-    uint64_t ks = kmem_alloc(len);
-    kwrite(ks, path, len);
-    int ret = (int)kexecute(GETOFFSET(vnode_lookup), ks, 0, vnode, vfs_context, 0, 0, 0);
+    uint64_t kstr = kstralloc(path);
+    int ret = (int)kexecute(GETOFFSET(vnode_lookup), kstr, 0, vnode, vfs_context, 0, 0, 0);
     if (ret != ERR_SUCCESS) {
         return -1;
     }
     *vpp = ReadKernel64(vnode);
-    kmem_free(ks, len);
+    kstrfree(kstr);
     kmem_free(vnode, sizeof(uint64_t));
     return 0;
 }
@@ -913,6 +911,7 @@ void jailbreak()
         FINDOFFSET(extension_release, NULL, true);
         FINDOFFSET(sfree, NULL, true);
         FINDOFFSET(sstrdup, NULL, true);
+        FINDOFFSET(strlen, NULL, true);
         found_offsets = true;
         LOG("Successfully found offsets.");
 
