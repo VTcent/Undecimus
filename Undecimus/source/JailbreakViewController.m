@@ -904,13 +904,15 @@ void jailbreak()
             FINDOFFSET(IOUserClient__vtable, NULL, true);
             FINDOFFSET(IORegistryEntry__getRegistryEntryID, NULL, true);
         }
-        FINDOFFSET(lck_mtx_lock, NULL, false);
-        FINDOFFSET(lck_mtx_unlock, NULL, false);
-        FINDOFFSET(proc_find, NULL, false);
-        FINDOFFSET(proc_rele, NULL, false);
+        FINDOFFSET(lck_mtx_lock, NULL, true);
+        FINDOFFSET(lck_mtx_unlock, NULL, true);
+        FINDOFFSET(proc_find, NULL, true);
+        FINDOFFSET(proc_rele, NULL, true);
         FINDOFFSET(extension_create_file, NULL, true);
         FINDOFFSET(extension_add, NULL, true);
         FINDOFFSET(extension_release, NULL, true);
+        FINDOFFSET(sfree, NULL, true);
+        FINDOFFSET(sstrdup, NULL, true);
         found_offsets = true;
         LOG("Successfully found offsets.");
 
@@ -1393,6 +1395,8 @@ void jailbreak()
         CACHEOFFSET(extension_create_file, "ExtensionCreateFile");
         CACHEOFFSET(extension_add, "ExtensionAdd");
         CACHEOFFSET(extension_release, "ExtensionRelease");
+        CACHEOFFSET(sfree, "Sfree");
+        CACHEOFFSET(sstrdup, "Sstrdup");
 #undef CACHEOFFSET
 #undef CACHEADDR
         if (![[NSMutableDictionary dictionaryWithContentsOfFile:offsetsFile] isEqual:dictionary]) {
